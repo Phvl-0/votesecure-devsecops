@@ -6,9 +6,10 @@ The pipeline was built as part of a DevSecOps assignment on a self-hosted GitLab
 
 ## What's in this repo
 
-- **Dockerfile**: a multi-stage build. A `node:22-alpine` stage installs dependencies and builds the app, then only the compiled files are copied into a small `nginx:alpine` image. The final image has no Node, no npm and no source code. Measured size of the published image: about 27 MB compressed, 95.8 MB on disk.
+- **Dockerfile**: a multi-stage build. A `node:22-alpine` stage installs dependencies and builds the app, then only the compiled files are copied into a small `nginx:alpine` image. The final image has no Node, no npm and no source code, and it runs `apk upgrade` to include Alpine security fixes released after the base image was built. Measured size of the published image: about 27 MB compressed, 95.8 MB on disk.
 - **nginx.conf**: hides the nginx version, sends `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY`, and falls back to `index.html` so React routes work.
 - **.gitlab-ci.yml**: a five-stage GitLab CI pipeline (below).
+- **.github/workflows/trivy.yml**: a GitHub Actions workflow that builds the image and scans it with Trivy on every push. The actions are pinned to full commit SHAs, and the job has read-only permissions and no secrets. It fails on HIGH or CRITICAL findings that have a fix available. Its first run found 3 fixable findings in the Alpine base layer (`brotli-libs` critical, `curl` and `libcurl` high), which the `apk upgrade` step fixed.
 - **tests/**: build smoke tests, run with `npm test`.
 - **supabase/config.toml**: holds only the Supabase project ID.
 
@@ -35,6 +36,6 @@ Then open http://localhost:8082.
 - The deploy rule matches the branch name `devsecops-pipeline`, so it would not trigger on this repo's `main`.
 - The secret scan only checks the files as they are now, not Git history, and its patterns do not include Supabase keys.
 - Lint has open errors in the existing code, and the dependency audit only fails on critical findings. At the time of the assignment, 7 production vulnerabilities remained, including one high in `zod`, which need breaking upgrades.
-- The container image has not been scanned yet. It sets no non-root user, and it serves plain HTTP; TLS would come from a reverse proxy.
+- The image is scanned in CI, but only for HIGH and CRITICAL findings that have a fix available, so unfixed findings are not flagged. It sets no non-root user, and it serves plain HTTP; TLS would come from a reverse proxy.
 - The backend is Supabase, a hosted service outside the scope of this repo.
 - Before this repo was published, its full history was searched for secrets: only public Supabase (anon) keys and the project URL were found, and no service-role key or passwords.
